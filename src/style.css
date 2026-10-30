@@ -1,0 +1,7 @@
+:root { color-scheme: light dark; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  text-align: center;
+}
+main { padding: 4rem 1rem; }
