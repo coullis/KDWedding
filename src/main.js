@@ -14,7 +14,7 @@ app.innerHTML = `
   <button id="checkout-open" class="checkout-open" type="button">
     Checkout <span id="checkout-count" class="checkout-count">0</span>
   </button>
-  <header><h1>Our Wedding Photos</h1></header>
+  <header><h1>Andreas & Dorita Wedding</h1></header>
   <p id="status">Loading...</p>
   <nav id="filters" class="filters" aria-label="Filter photos" hidden></nav>
   <div id="grid" class="grid"></div>
