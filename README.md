@@ -2,6 +2,11 @@
 
 A static page where friends and family can view and download wedding photos.
 
+Photos are read from the `photos` Supabase Storage bucket. Organize them into
+folders to show a capsule filter for each folder; **All** displays every photo.
+Nested folders are supported, and selecting a parent folder includes its
+subfolders.
+
 ## Local development
 
     npm install

@@ -10,10 +10,38 @@ header { text-align: center; padding: 2rem 1rem 1rem; }
 h1 { margin: 0; font-weight: 600; }
 #status { text-align: center; }
 
+.filters {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem 1.25rem;
+}
+.filters[hidden] { display: none; }
+.filter-tag {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+.filter-tag[aria-pressed='true'] {
+  border-color: #865b68;
+  color: #fff;
+  background: #865b68;
+}
+.filter-tag:focus-visible {
+  outline: 2px solid #865b68;
+  outline-offset: 3px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 6px;
+  gap: 16px;
   padding: 6px;
 }
 .thumb {
