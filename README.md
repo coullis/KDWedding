@@ -6,6 +6,9 @@ Photos are read from the `photos` Supabase Storage bucket. Organize them into
 folders to show a capsule filter for each folder; **All** displays every photo.
 Nested folders are supported, and selecting a parent folder includes its
 subfolders.
+Use the plus buttons on thumbnails or in the photo viewer to select pictures.
+The checkout panel lets you review and remove selections, then download them
+together as a ZIP archive.
 
 ## Local development
 

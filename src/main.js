@@ -1,5 +1,6 @@
 import './style.css';
 import { createClient } from '@supabase/supabase-js';
+import JSZip from 'jszip';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -10,14 +11,39 @@ const BUCKET = 'photos';
 const app = document.getElementById('app');
 
 app.innerHTML = `
+  <button id="checkout-open" class="checkout-open" type="button">
+    Checkout <span id="checkout-count" class="checkout-count">0</span>
+  </button>
   <header><h1>Our Wedding Photos</h1></header>
   <p id="status">Loading...</p>
   <nav id="filters" class="filters" aria-label="Filter photos" hidden></nav>
   <div id="grid" class="grid"></div>
+  <div id="checkout" class="checkout" role="dialog" aria-modal="true" aria-labelledby="checkout-title" hidden>
+    <section class="checkout-panel">
+      <button class="checkout-close" type="button" aria-label="Close checkout">&times;</button>
+      <h2 id="checkout-title">Selected photos</h2>
+      <p class="checkout-empty">No photos selected yet.</p>
+      <div class="checkout-slider" hidden>
+        <div class="checkout-slide">
+          <button class="checkout-prev" type="button" aria-label="Previous selected photo">&#8249;</button>
+          <img class="checkout-image" alt="" />
+          <button class="checkout-next" type="button" aria-label="Next selected photo">&#8250;</button>
+        </div>
+        <p class="checkout-caption"></p>
+        <p class="checkout-slide-count"></p>
+        <button class="checkout-remove" type="button">Remove from selection</button>
+      </div>
+      <p class="checkout-status" role="status" aria-live="polite"></p>
+      <button class="checkout-download" type="button" disabled>Download selected photos</button>
+    </section>
+  </div>
   <div id="lightbox" class="lightbox" hidden>
     <button class="lb-close" aria-label="Close">&times;</button>
     <button class="lb-prev" aria-label="Previous">&#8249;</button>
-    <img class="lb-img" alt="" />
+    <div class="lb-content">
+      <img class="lb-img" alt="" />
+      <button class="lb-select" type="button"></button>
+    </div>
     <button class="lb-next" aria-label="Next">&#8250;</button>
     <div class="lb-count"></div>
   </div>
@@ -26,14 +52,27 @@ app.innerHTML = `
 const grid = document.getElementById('grid');
 const status = document.getElementById('status');
 const filters = document.getElementById('filters');
+const checkoutOpen = document.getElementById('checkout-open');
+const checkoutCount = document.getElementById('checkout-count');
+const checkout = document.getElementById('checkout');
+const checkoutEmpty = checkout.querySelector('.checkout-empty');
+const checkoutSlider = checkout.querySelector('.checkout-slider');
+const checkoutImage = checkout.querySelector('.checkout-image');
+const checkoutCaption = checkout.querySelector('.checkout-caption');
+const checkoutSlideCount = checkout.querySelector('.checkout-slide-count');
+const checkoutStatus = checkout.querySelector('.checkout-status');
+const checkoutDownload = checkout.querySelector('.checkout-download');
 const lightbox = document.getElementById('lightbox');
 const lbImg = lightbox.querySelector('.lb-img');
 const lbCount = lightbox.querySelector('.lb-count');
+const lbSelect = lightbox.querySelector('.lb-select');
 
 let photos = [];
 let visiblePhotos = [];
+const selectedPhotos = new Set();
 let activeFolder = null;
 let current = 0;
+let checkoutIndex = 0;
 
 async function load() {
   const folders = [''];
@@ -117,6 +156,9 @@ function renderGrid() {
   grid.replaceChildren();
 
   visiblePhotos.forEach((photo, index) => {
+    const card = document.createElement('div');
+    card.className = 'photo-card';
+
     const thumb = document.createElement('button');
     thumb.type = 'button';
     thumb.className = 'thumb';
@@ -128,14 +170,70 @@ function renderGrid() {
     img.alt = '';
     img.loading = 'lazy';
     thumb.append(img);
-    grid.append(thumb);
+
+    const select = document.createElement('button');
+    select.type = 'button';
+    select.className = 'photo-select';
+    select.setAttribute('aria-pressed', String(selectedPhotos.has(photo.path)));
+    select.setAttribute(
+      'aria-label',
+      selectedPhotos.has(photo.path) ? 'Remove photo from selection' : 'Add photo to selection'
+    );
+    select.textContent = selectedPhotos.has(photo.path) ? '✓' : '+';
+    select.addEventListener('click', () => toggleSelection(photo.path));
+
+    card.append(thumb, select);
+    grid.append(card);
   });
+}
+
+function toggleSelection(path) {
+  if (selectedPhotos.has(path)) {
+    selectedPhotos.delete(path);
+  } else {
+    selectedPhotos.add(path);
+  }
+  renderGrid();
+  renderSelectionState();
+}
+
+function renderSelectionState() {
+  checkoutCount.textContent = String(selectedPhotos.size);
+  checkoutOpen.setAttribute('aria-label', `Checkout, ${selectedPhotos.size} photos selected`);
+
+  const photo = visiblePhotos[current];
+  if (photo) {
+    const isSelected = selectedPhotos.has(photo.path);
+    lbSelect.textContent = isSelected ? '✓ Added to selection' : '+ Add to selection';
+    lbSelect.setAttribute('aria-pressed', String(isSelected));
+  }
+
+  if (!checkout.hidden) renderCheckout();
+}
+
+function renderCheckout() {
+  const items = photos.filter((photo) => selectedPhotos.has(photo.path));
+  checkoutEmpty.hidden = items.length > 0;
+  checkoutSlider.hidden = items.length === 0;
+  checkoutDownload.disabled = items.length === 0;
+
+  if (!items.length) return;
+
+  checkoutIndex = Math.min(checkoutIndex, items.length - 1);
+  const photo = items[checkoutIndex];
+  checkoutImage.src = photo.url;
+  checkoutCaption.textContent = photo.path;
+  checkoutSlideCount.textContent = `${checkoutIndex + 1} / ${items.length}`;
+  checkout.querySelector('.checkout-prev').disabled = items.length < 2;
+  checkout.querySelector('.checkout-next').disabled = items.length < 2;
 }
 
 function show(i) {
   current = (i + visiblePhotos.length) % visiblePhotos.length;
-  lbImg.src = visiblePhotos[current].url;
+  const photo = visiblePhotos[current];
+  lbImg.src = photo.url;
   lbCount.textContent = `${current + 1} / ${visiblePhotos.length}`;
+  renderSelectionState();
 }
 
 function openLightbox(i) {
@@ -150,9 +248,77 @@ function closeLightbox() {
   document.body.classList.remove('no-scroll');
 }
 
+function openCheckout() {
+  renderCheckout();
+  checkoutStatus.textContent = '';
+  checkout.hidden = false;
+  document.body.classList.add('no-scroll');
+}
+
+function closeCheckout() {
+  checkout.hidden = true;
+  document.body.classList.remove('no-scroll');
+}
+
+function showCheckoutPhoto(offset) {
+  const items = photos.filter((photo) => selectedPhotos.has(photo.path));
+  if (!items.length) return;
+  checkoutIndex = (checkoutIndex + offset + items.length) % items.length;
+  renderCheckout();
+}
+
 grid.addEventListener('click', (e) => {
   const thumb = e.target.closest('.thumb');
   if (thumb) openLightbox(Number(thumb.dataset.i));
+});
+
+checkoutOpen.addEventListener('click', openCheckout);
+checkout.querySelector('.checkout-close').addEventListener('click', closeCheckout);
+checkout.querySelector('.checkout-prev').addEventListener('click', () => showCheckoutPhoto(-1));
+checkout.querySelector('.checkout-next').addEventListener('click', () => showCheckoutPhoto(1));
+checkout.querySelector('.checkout-remove').addEventListener('click', () => {
+  const photo = photos.filter((item) => selectedPhotos.has(item.path))[checkoutIndex];
+  if (photo) toggleSelection(photo.path);
+});
+checkout.addEventListener('click', (e) => {
+  if (e.target === checkout) closeCheckout();
+});
+checkoutDownload.addEventListener('click', async () => {
+  const items = photos.filter((photo) => selectedPhotos.has(photo.path));
+  if (!items.length) return;
+
+  checkoutDownload.disabled = true;
+  checkoutStatus.textContent = 'Preparing your download...';
+
+  try {
+    const zip = new JSZip();
+    for (const photo of items) {
+      const response = await fetch(photo.url);
+      if (!response.ok) {
+        throw new Error(`Could not download ${photo.path} (${response.status}).`);
+      }
+      zip.file(photo.path, await response.blob());
+    }
+
+    const archive = await zip.generateAsync({ type: 'blob' });
+    const downloadUrl = URL.createObjectURL(archive);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = 'wedding-photos.zip';
+    link.click();
+    URL.revokeObjectURL(downloadUrl);
+    checkoutStatus.textContent = `Downloaded ${items.length} photo${items.length === 1 ? '' : 's'}.`;
+  } catch (error) {
+    checkoutStatus.textContent =
+      error instanceof Error ? `Download failed: ${error.message}` : 'Download failed.';
+  } finally {
+    checkoutDownload.disabled = selectedPhotos.size === 0;
+  }
+});
+
+lbSelect.addEventListener('click', () => {
+  const photo = visiblePhotos[current];
+  if (photo) toggleSelection(photo.path);
 });
 
 lightbox.querySelector('.lb-close').addEventListener('click', closeLightbox);
@@ -163,8 +329,12 @@ lightbox.addEventListener('click', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (!checkout.hidden) closeCheckout();
+    else if (!lightbox.hidden) closeLightbox();
+    return;
+  }
   if (lightbox.hidden) return;
-  if (e.key === 'Escape') closeLightbox();
   if (e.key === 'ArrowLeft') show(current - 1);
   if (e.key === 'ArrowRight') show(current + 1);
 });
